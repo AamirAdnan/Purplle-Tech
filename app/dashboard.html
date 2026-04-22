@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Apex Retail Intelligence Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #0f172a;
+    color: white;
+    margin: 0;
+}
+.header {
+    padding: 20px;
+    font-size: 24px;
+    font-weight: bold;
+    background: #020617;
+    border-bottom: 1px solid #1e293b;
+}
+.container {
+    padding: 20px;
+}
+.grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+}
+.card {
+    background: #1e293b;
+    padding: 20px;
+    border-radius: 12px;
+}
+.big {
+    font-size: 28px;
+    font-weight: bold;
+}
+.label {
+    color: #94a3b8;
+}
+.chart-container {
+    margin-top: 20px;
+}
+.anomaly {
+    background: #7f1d1d;
+    padding: 10px;
+    border-radius: 8px;
+    margin-top: 10px;
+}
+.ok {
+    background: #064e3b;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+🚀 Apex Retail — Store Intelligence Dashboard
+</div>
+
+<div class="container">
+
+<div class="grid">
+    <div class="card">
+        <div class="label">Visitors</div>
+        <div id="visitors" class="big">--</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Conversion Rate</div>
+        <div id="conversion" class="big">--%</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Avg Queue</div>
+        <div id="queue" class="big">--</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Total Events</div>
+        <div id="events" class="big">--</div>
+    </div>
+</div>
+
+<div class="grid" style="margin-top:20px;">
+    <div class="card">
+        <h3>🛒 Funnel</h3>
+        <canvas id="funnelChart"></canvas>
+    </div>
+
+    <div class="card">
+        <h3>📊 Zone Popularity</h3>
+        <canvas id="zoneChart"></canvas>
+    </div>
+</div>
+
+<div class="card chart-container">
+    <h3>⏰ Hourly Traffic</h3>
+    <canvas id="trafficChart"></canvas>
+</div>
+
+<div class="card chart-container">
+    <h3>⚠️ Insights</h3>
+    <div id="anomalies"></div>
+</div>
+
+</div>
+
+<script>
+
+async function loadData() {
+    const res = await fetch('/api/metrics');
+    const data = await res.json();
+
+    // Top cards
+    document.getElementById('visitors').innerText = data.footfall.unique_visitors;
+    document.getElementById('conversion').innerText = data.conversion.rate_pct + "%";
+    document.getElementById('queue').innerText = data.billing.avg_queue;
+    document.getElementById('events').innerText = data.detection.total_events;
+
+    // Funnel
+    new Chart(document.getElementById('funnelChart'), {
+        type: 'bar',
+        data: {
+            labels: data.funnel.map(f => f.stage),
+            datasets: [{
+                data: data.funnel.map(f => f.count),
+                borderWidth: 1
+            }]
+        }
+    });
+
+    // Zone
+    new Chart(document.getElementById('zoneChart'), {
+        type: 'pie',
+        data: {
+            labels: Object.keys(data.zones.visits),
+            datasets: [{
+                data: Object.values(data.zones.visits)
+            }]
+        }
+    });
+
+    // Traffic
+    new Chart(document.getElementById('trafficChart'), {
+        type: 'line',
+        data: {
+            labels: data.hourly_traffic.map(h => h.hour),
+            datasets: [{
+                label: 'Visitors',
+                data: data.hourly_traffic.map(h => h.visitors),
+                fill: false
+            }]
+        }
+    });
+
+    // Anomalies
+    const container = document.getElementById('anomalies');
+    container.innerHTML = '';
+
+    data.anomalies.forEach(a => {
+        const div = document.createElement('div');
+        div.className = 'anomaly';
+
+        if (a.severity === "INFO") {
+            div.classList.add('ok');
+        }
+
+        div.innerHTML = `
+            <b>${a.type}</b><br>
+            ${a.message}<br>
+            <i>${a.action}</i>
+        `;
+
+        container.appendChild(div);
+    });
+}
+
+loadData();
+
+</script>
+
+</body>
+</html>
