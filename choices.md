@@ -1,7 +1,7 @@
 
 ---
 
-# ⚙️ ✅ `CHOICES.md` (USE THIS)
+# ⚙️ ✅ `CHOICES.md` 
 
 ```md
 # ⚙️ Design Choices & Tradeoffs
