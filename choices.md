@@ -1,146 +1,214 @@
+# CHOICES.md 
+
+This document outlines key architectural decisions made during the development of the Store Intelligence system.
 
 ---
 
-# ⚙️ ✅ `CHOICES.md` 
+## 1. Detection Model: YOLOv8 Nano
 
-```md
-# ⚙️ Design Choices & Tradeoffs
+Options Considered:
+- YOLOv8n (Nano)
+- YOLOv8s (Small)
+- RT-DETR
 
-This document explains the reasoning behind major decisions taken during development.
+AI Suggestion:
+Gemini suggested YOLOv8s for better accuracy in crowded scenes.
 
----
+My Choice:
+YOLOv8n (Nano)
 
-## 1. Choice: YOLOv8 for Detection
+Rationale:
+The primary requirement was real-time or near real-time processing on limited hardware. YOLOv8n provides significantly faster inference (~25–30 FPS on CPU), which allows the system to handle multiple cameras and additional processing like tracking and event generation.
 
-### Why?
-- Easy to use with Python
-- Fast inference
-- Good enough for detecting people
+While YOLOv8s offers better accuracy, YOLOv8n was sufficient for detecting people in a typical retail environment and ensured system responsiveness.
 
-### Tradeoff
-- Not highly accurate in crowded scenes
-- Cannot differentiate staff vs customers
-
----
-
-## 2. Choice: ByteTrack for Tracking
-
-### Why?
-- Works well with YOLO outputs
-- Handles multiple objects efficiently
-
-### Tradeoff
-- Track ID switches occur
-- Impacts ReID accuracy
+Tradeoff:
+Lower accuracy → observed confidence ~55% and occasional missed detections.
 
 ---
 
-## 3. Choice: Custom ReIDTracker
+## 2. Tracking Algorithm: ByteTrack
 
-### Why?
-- Needed persistent identity across frames
-- Helps detect re-entry and sessions
+Options Considered:
+- SORT
+- DeepSORT
+- ByteTrack
 
-### Tradeoff
-- Simplified logic → not robust
-- Cross-camera identity tracking is weak
+AI Suggestion:
+ByteTrack recommended for handling occlusion better.
 
----
+My Choice:
+ByteTrack
 
-## 4. Choice: Event-Based Architecture
+Rationale:
+ByteTrack performs well in crowded scenes and integrates easily with YOLO outputs. It was chosen for its balance between speed and tracking stability.
 
-### Why?
-- Converts raw video into meaningful business insights
-- Easier to debug and analyze
-
-### Tradeoff
-- Requires careful event design
-- Errors propagate into analytics
+Tradeoff:
+Track ID switches occur, which affects ReID accuracy.
 
 ---
 
-## 5. Choice: JSONL for Storage
+## 3. Event Schema: Flat vs Nested
 
-### Why?
-- Simple append-only format
-- Easy to inspect manually
-- Works well during development
+Options Considered:
 
-### Tradeoff
+Nested:
+{
+  visitor: { id: 1, type: "staff" },
+  event: { ... }
+}
+
+Flat:
+{
+  visitor_id: 1,
+  is_staff: true,
+  ...
+}
+
+AI Suggestion:
+Claude suggested a nested JSON structure for flexibility.
+
+My Choice:
+Flat schema
+
+Rationale:
+The system frequently filters and aggregates data (e.g., excluding staff). A flat schema allows faster access and simpler aggregation logic without nested traversal.
+
+Tradeoff:
+Less flexible for deeply structured metadata.
+
+---
+
+## 4. Storage Format: JSONL
+
+Options Considered:
+- JSON file
+- CSV
+- Database
+
+My Choice:
+JSONL (JSON Lines)
+
+Rationale:
+- Append-only → perfect for streaming events
+- Easy to debug manually
+- Simple to integrate with pipeline
+
+Tradeoff:
 - Not scalable
-- No indexing or querying optimization
+- No indexing
 
 ---
 
-## 6. Choice: FastAPI Backend
+## 5. API Architecture: FastAPI
 
-### Why?
+Options Considered:
+- Flask
+- FastAPI
+- Node.js (Express)
+
+AI Suggestion:
+FastAPI recommended for async support and validation.
+
+My Choice:
+FastAPI
+
+Rationale:
 - Lightweight and fast
-- Easy to build APIs
+- Built-in validation using Pydantic
+- Easy API creation
 
-### Tradeoff
-- No built-in frontend support
-- Requires separate dashboard
+Tradeoff:
+- No frontend → required separate dashboard
 
 ---
 
-## 7. Choice: Chart.js Dashboard
+## 6. Dashboard Technology: Chart.js
 
-### Why?
+Options Considered:
+- React dashboard
+- Streamlit
+- Chart.js
+
+My Choice:
+Chart.js with plain HTML
+
+Rationale:
 - Quick to implement
 - Lightweight
+- Sufficient for visualization
 
-### Tradeoff
-- Limited flexibility compared to modern frameworks
-- Manual DOM handling caused initial bugs
-
----
-
-## 8. Choice: Heuristic Staff Detection
-
-### Why?
-- No labeled dataset available
-- Needed quick approximation
-
-### Approach
-- Backstore camera = staff
-- Black outfit detection heuristic
-
-### Tradeoff
-- Major overcounting issue (observed in results)
+Tradeoff:
+- Manual DOM handling caused bugs (e.g., null element errors)
+- Less scalable than full frontend frameworks
 
 ---
 
-## 9. Decision: Focus on Pipeline Over Accuracy
+## 7. Staff Detection Approach
 
-### Why?
-- Assignment emphasizes system thinking
-- Building end-to-end flow was prioritized
+Options Considered:
+- Trained classification model
+- Heuristic-based detection
 
-### Result
-- Functional system with imperfect outputs
+My Choice:
+Heuristic approach
 
----
+Implementation:
+- Backstore camera → staff
+- Black outfit detection
 
-## 10. Debugging Learnings
+Rationale:
+No labeled dataset was available, so heuristic rules were used for quick implementation.
 
-During development, multiple real-world issues were encountered:
-
-- Dependency installation failures (Rust, watchfiles)
-- Path issues in Windows vs Colab
-- Encoding errors in HTML loading
-- Dashboard crashes due to missing elements
-- No events generated due to incorrect entry line
-
-These were resolved step-by-step and improved system stability.
+Tradeoff:
+Significant overcounting observed (100+ vs actual ~9 staff)
 
 ---
 
-## 🧠 Final Thought
+## 8. Event-Based Architecture
 
-This project is not a perfect AI system, but a realistic prototype demonstrating:
+My Choice:
+Convert all outputs into structured events
+
+Rationale:
+- Easier debugging
+- Decouples detection from analytics
+- Enables flexible metric computation
+
+Tradeoff:
+Errors in early stages propagate to final metrics
+
+---
+
+## 9. Anomaly Detection Strategy
+
+My Choice:
+Threshold-based logic
+
+Rationale:
+Machine learning-based anomaly detection requires historical data. For a fresh deployment, simple rules (e.g., low conversion, high queue) provide immediate insights.
+
+Enhancement:
+Added `suggested_action` to convert analytics into actionable insights.
+
+---
+
+## 10. Development Approach
+
+Key Decision:
+Focus on building a complete pipeline rather than perfect accuracy
+
+Rationale:
+The goal was to demonstrate:
 - System design
 - Event-driven architecture
-- Debugging and problem-solving
+- Debugging ability
 
-The focus was on building something complete and explainable rather than achieving perfect accuracy.
+Outcome:
+A fully working system with imperfect but explainable results
+
+---
+
+## Final Thought
+
+This project is intentionally not optimized for perfect accuracy. Instead, it demonstrates how raw video data can be transformed into structured insights through a complete, end-to-end pipeline.
